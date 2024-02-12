@@ -1,0 +1,136 @@
+version: '3.2'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    hostname: zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  broker:
+    image: confluentinc/cp-kafka:7.4.0
+    hostname: broker
+    container_name: broker
+    depends_on:
+      - zookeeper
+    ports:
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+
+  ksqldb-server:
+    image: confluentinc/ksqldb-server:0.29.0
+    hostname: ksqldb-server
+    container_name: ksqldb-server
+    command: [ "ksql-server-start", "ksql-server.properties" ]
+    depends_on:
+      - broker
+    working_dir: /etc/ksql-server
+    ports:
+      - "8088:8088"
+      - "1099:1099"
+      - "12345:12345"
+    volumes:
+      - ./config/ksql-server.properties:/etc/ksql-server/ksql-server.properties
+      - ./jmx_prometheus_javaagent-0.20.0.jar:/etc/ksql-server/jmx_prometheus_javaagent-0.20.0.jar
+      - ./config/jmx-exporter-config.yaml:/etc/ksql-server/config.yaml
+    environment:
+      KSQL_JMX_OPTS: >
+        -javaagent:/etc/ksql-server/jmx_prometheus_javaagent-0.20.0.jar=12345:/etc/ksql-server/config.yaml
+        -Djava.rmi.server.hostname=localhost
+        -Dcom.sun.management.jmxremote
+        -Dcom.sun.management.jmxremote.port=1099
+        -Dcom.sun.management.jmxremote.authenticate=false
+        -Dcom.sun.management.jmxremote.ssl=false
+        -Dcom.sun.management.jmxremote.rmi.port=1099
+
+
+  # Log into the KSQL CLI with docker-compose exec ksqldb-cli ksql http://ksqldb-server:8088
+
+  ksqldb-cli:
+    image: confluentinc/ksqldb-cli:0.29.0
+    container_name: ksqldb-cli
+    depends_on:
+      - broker
+      - ksqldb-server
+    entrypoint: /bin/sh
+    tty: true
+    volumes:
+      - ./src/main/resources/queries/ksql/:/home/appuser/queries/ksql/
+
+  jobmanager:
+    image: flink:1.17-java11
+    ports:
+      - "8081:8081"
+      - "9020-9030:9020-9030"
+      - "9250:9250"
+    command: jobmanager
+    volumes:
+      - ./config:/opt/flink/bin/config
+      - ./build/libs/:/opt/flink/bin/build/libs/
+      - ./src/main/resources/queries/flink/:/opt/flink/bin/src/main/resources/queries/flink/
+      - ./src/main/resources/bin/flink:/opt/flink/bin/src/main/resources/bin/flink
+    environment:
+      - |
+        FLINK_PROPERTIES=
+        jobmanager.rpc.address: jobmanager
+        metrics.reporters: jmx, prom
+        metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+        metrics.reporter.prom.port: 9250
+        metrics.reporter.jmx.factory.class: org.apache.flink.metrics.jmx.JMXReporterFactory
+        metrics.reporter.jmx.port: 9020-9030
+        metrics.delimiter: .
+        env.java.opts: -Djava.net.preferIPv4Stack=true -Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=0.0.0.0 -Dcom.sun.management.jmxremote.local.only=false
+        io.tmp.dirs: /tmp
+        state.backend: rocksdb
+        state.checkpoints.dir: file:///opt/flink/checkpoints  #file:///home/ubuntu/checkpoints/
+        state.backend.rocksdb.localdir: /tmp
+        state.backend.incremental: true
+        execution.checkpointing.interval: 180000
+        execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+        execution.checkpointing.max-concurrent-checkpoints: 1
+        execution.checkpointing.min-pause: 0
+        execution.checkpointing.mode: EXACTLY_ONCE
+        execution.checkpointing.timeout: 10min
+        execution.checkpointing.tolerable-failed-checkpoints: 0
+        execution.checkpointing.unaligned: false
+        execution.checkpointing.checkpoints-after-tasks-finish.enabled: false
+        state.backend.local-recovery: true
+        jobmanager.execution.failover-strategy: region
+  taskmanager:
+    image: flink:1.17-java11
+    depends_on:
+      - jobmanager
+    command: taskmanager
+    ports:
+      - "8789-8799:8789-8799"
+      - "9249:9249"
+    volumes:
+      - ./config/flink-conf.yaml:/opt/flink/conf/flink-conf.yaml
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: jobmanager
+    deploy:
+      replicas: 1
+
+  materialized:
+    image: materialize/materialized:v0.69.0
+    ports:
+      - "6875:6875"
+
+  # Run this with docker-compose run cli to launch the psql shell against Materialize
+  cli:
+    depends_on:
+      - materialized
+    image: materialize/cli:v0.69.0
+    volumes:
+      - ./src/main/resources/queries/materialize/:/home/appuser/queries/materialize/

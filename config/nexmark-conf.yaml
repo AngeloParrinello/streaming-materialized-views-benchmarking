@@ -1,0 +1,12 @@
+#--------------------------------------------------
+# The configuration file for the Nexmark benchmark.
+#--------------------------------------------------
+
+#--------------------------------------------------
+# Benchmark configuration
+#--------------------------------------------------
+nexmark.number.events: 1000000
+nexmark.kafka.bootstrap.servers: broker:9092
+nexmark.kafka.delivery.guarantee: at_least_once
+nexmark.kafka.producer.properties.path:
+

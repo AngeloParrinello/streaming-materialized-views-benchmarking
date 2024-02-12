@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+
+<!DOCTYPE suppressions PUBLIC
+        "-//Puppy Crawl//DTD Suppressions 1.1//EN"
+        "http://checkstyle.sourceforge.net/dtds/suppressions_1_1.dtd">
+
+<suppressions>
+    <!-- Suppress checks for generated code. -->
+    <suppress files="[/\\]target[/\\]" checks=".*"/>
+    <!-- Suppress checks for archive and class files. -->
+    <suppress files=".+\.(?:jar|zip|war|class|tar|bin)$" checks=".*"/>
+    <!-- Suppress checks for hidden files and folders. -->
+    <suppress files="[/\\]\..+" checks=".+"/>
+    <!-- Excluding test files from checks -->
+    <suppress files="[/\\]src[/\\]test[/\\]java[/\\]*" checks="MagicNumber"/>
+</suppressions>

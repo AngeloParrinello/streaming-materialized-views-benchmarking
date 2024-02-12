@@ -1,0 +1,199 @@
+import com.github.jengelman.gradle.plugins.shadow.transformers.Log4j2PluginsCacheFileTransformer
+import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.api.tasks.testing.logging.TestLogEvent
+
+plugins {
+    id 'java'
+    id 'application'
+    id 'checkstyle'
+    id "com.github.johnrengelman.shadow" version "${shadowJarVersion}"
+    id 'com.diffplug.spotless' version "${spotlessVersion}"
+    id "com.github.spotbugs" version "${spotbugsVersion}"
+}
+
+checkstyle {
+    configFile = rootProject.file("${checkstyleConfigFilePath}")
+    toolVersion = "${checkstyleVersion}"
+}
+
+spotbugs {
+    toolVersion = "${spotbugsVersion}"
+    ignoreFailures = true
+    effort = "max"
+    reportLevel = "high"
+    showProgress = true
+}
+
+repositories {
+    mavenCentral()
+    // Confluent repo
+    maven {
+        url 'https://packages.confluent.io/maven/'
+    }
+}
+
+configurations.configureEach {
+    exclude module: 'slf4j-reload4j'
+}
+
+dependencies {
+    implementation 'org.apache.logging.log4j:log4j-core:' + "${slf4jLog4jVersion}"
+    implementation 'org.apache.logging.log4j:log4j-api:' + "${slf4jLog4jVersion}"
+
+    compileOnly 'org.jetbrains:annotations:' + "${jetbrainsAnnotationsVersion}"
+
+    // Flink dependencies
+    implementation 'org.apache.flink:flink-table-api-java:' + "${flinkVersion}"
+    compileOnly 'org.apache.flink:flink-table-api-java-bridge:' + "${flinkVersion}"
+    compileOnly 'org.apache.flink:flink-core:' + "${flinkVersion}"
+    compileOnly 'org.apache.flink:flink-streaming-java:' + "${flinkVersion}"
+    implementation 'org.apache.flink:flink-connector-kafka:' + "${flinkVersion}"
+    implementation 'org.apache.flink:flink-clients:' + "${flinkVersion}"
+    // implementation 'org.apache.flink:flink-java:' + "${flinkVersion}"
+    // testImplementation 'org.apache.flink:flink-runtime-web:' + "${flinkVersion}"
+    // compileOnly 'org.apache.flink:flink-table-common:' + "${flinkVersion}"
+    // implementation 'org.apache.flink:flink-connector-base:' + "${flinkVersion}"
+    // testImplementation 'org.apache.flink:flink-json:' + "${flinkVersion}"
+    // compileOnly 'org.apache.flink:flink-table-runtime:' + "${flinkVersion}"
+    // compileOnly 'org.apache.flink:flink-table-planner-loader:' + "${flinkVersion}"
+
+    // If you want to use the EmbeddedRocksDBStateBackend in your IDE or
+    // configure it programmatically in your Flink job, you will
+    // have to add the following dependency to your Flink project.
+    // implementation 'org.apache.flink:flink-statebackend-rocksdb:' + "${flinkVersion}"
+    // implementation 'org.apache.flink:flink-table-api-java:' + "${flinkVersion}"
+
+    // Flink test dependencies
+    testImplementation 'org.apache.flink:flink-test-utils-junit:' + "${flinkVersion}"
+    testImplementation 'org.apache.flink:flink-table-planner_2.12:' + "${flinkVersion}"
+    testImplementation 'org.apache.flink:flink-test-utils:' + "${flinkVersion}"
+
+
+    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine:' + "${junitVersion}"
+    testImplementation 'org.junit.jupiter:junit-jupiter:' + "${junitVersion}"
+
+
+    testImplementation 'org.testcontainers:testcontainers:' + "${testContainersVersion}"
+    testImplementation 'org.testcontainers:junit-jupiter:' + "${testContainersVersion}"
+    testImplementation 'org.testcontainers:kafka:' + "${testContainersVersion}"
+
+    implementation 'com.fasterxml.jackson.core:jackson-databind:' + "${jacksonVersion}"
+    implementation 'com.fasterxml.jackson.core:jackson-core:' + "${jacksonVersion}"
+    implementation 'com.fasterxml.jackson.core:jackson-annotations:' + "${jacksonVersion}"
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310:' + "${jacksonVersion}"
+
+    implementation 'io.confluent.ksql:ksqldb-api-client:' + "${ksqlDBClientVersion}" + ':with-dependencies'
+
+    implementation 'org.apache.kafka:kafka-streams:' + "${kafkaStreamVersion}"
+    // implementation 'io.confluent.ksql:ksqldb-udf:' + "${ksqlDBClientVersion}"
+
+    implementation 'org.postgresql:postgresql:' + "${postgreSQLVersion}"
+
+    implementation 'com.squareup.okhttp3:okhttp:' + "${okHttpVersion}"
+
+    implementation 'com.j256.simplejmx:simplejmx:' + "${simpleJmxVersion}"
+
+    implementation 'org.apache.commons:commons-csv:' + "${commonsCsvVersion}"
+
+    implementation 'software.amazon.msk:aws-msk-iam-auth:' + "${awsMskIamAuthVersion}"
+
+}
+
+application {
+    mainClassName = 'it.agilelab.thesis.nexmark.flink.jobs.EventsOnKafkaJob'
+}
+
+tasks.withType(Test).configureEach {
+    testLogging {
+        // set options for log level LIFECYCLE
+        events TestLogEvent.FAILED,
+                TestLogEvent.PASSED,
+                TestLogEvent.SKIPPED
+        // TestLogEvent.STANDARD_OUT
+        exceptionFormat TestExceptionFormat.FULL
+        showExceptions true
+        showCauses true
+        showStackTraces true
+
+        // set options for log level DEBUG and INFO
+        debug {
+            events TestLogEvent.STARTED,
+                    TestLogEvent.FAILED,
+                    TestLogEvent.PASSED,
+                    TestLogEvent.SKIPPED,
+                    TestLogEvent.STANDARD_ERROR,
+                    TestLogEvent.STANDARD_OUT
+            exceptionFormat TestExceptionFormat.FULL
+        }
+        //info.events = debug.events
+        //info.exceptionFormat = debug.exceptionFormat
+
+        // Called after the test finishes
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+                def startItem = '|  ', endItem = '  |'
+                def repeatLength = startItem.length() + output.length() + endItem.length()
+                println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
+            }
+        }
+    }
+}
+
+tasks.withType(Test).configureEach {
+    testLogging {
+        // set options for log level LIFECYCLE
+        events TestLogEvent.FAILED,
+                TestLogEvent.PASSED,
+                TestLogEvent.SKIPPED
+        // TestLogEvent.STANDARD_OUT
+        exceptionFormat TestExceptionFormat.FULL
+        showExceptions true
+        showCauses true
+        showStackTraces true
+
+        // set options for log level DEBUG and INFO
+        debug {
+            events TestLogEvent.STARTED,
+                    TestLogEvent.FAILED,
+                    TestLogEvent.PASSED,
+                    TestLogEvent.SKIPPED,
+                    TestLogEvent.STANDARD_ERROR,
+                    TestLogEvent.STANDARD_OUT
+            exceptionFormat TestExceptionFormat.FULL
+        }
+        //info.events = debug.events
+        //info.exceptionFormat = debug.exceptionFormat
+
+        // Called after the test finishes
+        afterSuite { desc, result ->
+            if (!desc.parent) { // will match the outermost suite
+                def output = "Results: ${result.resultType} (${result.testCount} tests, ${result.successfulTestCount} passed, ${result.failedTestCount} failed, ${result.skippedTestCount} skipped)"
+                def startItem = '|  ', endItem = '  |'
+                def repeatLength = startItem.length() + output.length() + endItem.length()
+                println('\n' + ('-' * repeatLength) + '\n' + startItem + output + endItem + '\n' + ('-' * repeatLength))
+            }
+        }
+    }
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+shadowJar {
+    archiveBaseName.set('EventsOnKafkaJob')
+    archiveVersion.set('')
+    transform(Log4j2PluginsCacheFileTransformer)
+    archiveClassifier.set('')
+    manifest {
+        attributes 'Main-Class': 'it.agilelab.thesis.nexmark.flink.jobs.EventsOnKafkaJob'
+    }
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(11)
+    }
+}
+

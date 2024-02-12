@@ -1,0 +1,216 @@
+# This file defines the default properties for Flink.
+# Defaults might be overwritten by a session specific environment.
+
+#=====================
+# Hostnames / Ports
+#=====================
+jobmanager.rpc.address: jobmanager
+jobmanager.rpc.port: 6123
+jobmanager.bind-host: localhost
+taskmanager.bind-host: localhost
+taskmanager.host: localhost
+
+#=====================
+# Memory sizes
+#=====================
+taskmanager.memory.process.size: 2G
+jobmanager.memory.process.size: 2G
+
+#=====================
+# Parallelism
+#=====================
+taskmanager.numberOfTaskSlots: 8
+parallelism.default: 8
+
+#=====================
+# Checkpointing
+#=====================
+
+# You can configure checkpointing directly in code within your Flink job
+# or application. Putting these values here in the configuration defines them
+# as defaults in case the application does not configure anything.
+
+# The default state backend, if you specify nothing, is the jobmanager.
+# However, you can choose your backend per-job in your code.
+# state.backend: rocksdb
+# This is the configuration property name that determines the
+# directory location for storing checkpoint files.
+# Remember to change this to a suitable directory for your environment.
+# By setting the state.checkpoints.dir property to an appropriate local
+# file path, you ensure that Flink can create and manage checkpoints in
+# the specified directory, enabling stateful fault-tolerance and
+# recovery capabilities.
+# state.checkpoints.dir: file:///path/to/checkpoint i.e. C:\Users\angelo.parrinello\streaming-materialized-views-benchmarking\flink\checkpoints
+
+# It is used to specify the default directory for storing savepoints in Flink applications.
+# It's important to configure this property appropriately in your Flink
+# application to ensure that savepoints are stored in a secure and
+# accessible location. Savepoints are critical for application
+# recovery and migration, so it's recommended to choose a reliable storage
+# system and backup the savepoints regularly.
+# NOT SURE ABOUT THIS
+#state.savepoints.dir: file:///path/to/checkpoint i.e. C:\Users\angelo.parrinello\streaming-materialized-views-benchmarking\flink\savepoints
+
+# Remember that rocksdb should be on a persistent volume such as HDFS or S3.
+# A checkpoint is a copy of your application state that is used to restore
+# the application state in case of a failure such as a machine failure. The path must point
+# to a persistent and remote storage to be able to read the checkpoint in case that a process was killed
+# or a machine died. If a checkpoint was written to the local filesystem of a machine that failed,
+# you would not be able to recover the job and restore the state.
+
+io.tmp.dirs: /tmp
+state.backend: rocksdb
+# It could be happening that the flink docker image does not have the permission to write on other folder
+# than /tmp and /opt/flink. So in that case, you should change the state.checkpoints.dir to /opt/flink/checkpoints.
+# https://github.com/apache/flink-docker/blob/abc36dd88483a221c0f5495c742bd95c349e9ac2/1.17/scala_2.12-java11-ubuntu/Dockerfile
+# see line 53-57
+state.checkpoints.dir: file:///opt/flink/checkpoints  #file:///home/ubuntu/checkpoints/
+state.backend.rocksdb.localdir: /tmp
+state.backend.incremental: true
+execution.checkpointing.interval: 180000
+execution.checkpointing.externalized-checkpoint-retention: RETAIN_ON_CANCELLATION
+execution.checkpointing.max-concurrent-checkpoints: 1
+execution.checkpointing.min-pause: 0
+execution.checkpointing.mode: EXACTLY_ONCE
+execution.checkpointing.timeout: 10min
+execution.checkpointing.tolerable-failed-checkpoints: 0
+execution.checkpointing.unaligned: false
+# disable final checkpoint to avoid test waiting for the last checkpoint complete
+execution.checkpointing.checkpoints-after-tasks-finish.enabled: false
+state.backend.local-recovery: true
+jobmanager.execution.failover-strategy: region
+
+#==============================================================================
+# Resources & Slots
+#==============================================================================
+
+# Timeout (ms) for an idle TM to be released.
+slotmanager.taskmanager-timeout: 600000
+
+#=====================
+# High Availability with ZooKeeper
+#=====================
+# See https://nightlies.apache.org/flink/flink-docs-release-1.17/docs/deployment/ha/overview/ for more information
+# about high availability.
+# high-availability: zookeeper
+# A Flink HA setup requires a running Apache ZooKeeper cluster and a persistent remote storage,
+# such as HDFS, NFS, or S3.
+# high-availability.storageDir: hdfs:///flink/recovery
+# high-availability.zookeeper.quorum: localhost:2181 #address1:2181[,...],addressX:2181.
+# Each addressX:port refers to a ZooKeeper server, which is reachable by Flink at the given address and port.
+# high-availability.zookeeper.path.root: /flink
+# You should not set this value manually when running on YARN, native Kubernetes or on another cluster manager.
+# In those cases a cluster-id is being automatically generated. If you are running multiple Flink HA clusters on bare\
+# metal, you have to manually configure separate cluster-ids for each cluster.
+# high-availability.cluster-id: /default # default value, important: customize per cluster
+
+#==============================================================================
+# Job schedule & failover
+#==============================================================================
+
+# Restart strategy related configuration
+restart-strategy: fixed-delay
+restart-strategy.fixed-delay.attempts: 2147483647
+restart-strategy.fixed-delay.delay: 10 s
+# Max task attempts to retain in JM
+jobmanager.execution.attempts-history-size: 100
+
+#=====================
+# Others
+#=====================
+
+# Configuration options for adjusting and tuning table programs.
+# Mini-batch processing allows the execution of queries in small batches of data,
+# which can improve processing performance and reduce overall latency.
+table.exec.mini-batch.enabled: true
+# It specifies the maximum time that a record can wait in the mini-batch buffer before it is processed.
+table.exec.mini-batch.allow-latency: 2s
+# It specifies the maximum number of records that can be buffered in the mini-batch buffer before they are processed.
+table.exec.mini-batch.size: 50000
+# When enabled,
+# the optimizer will attempt
+# to split distinct aggregation operations into two separate aggregation operations to improve performance.
+# This optimization can be beneficial when dealing with large data sets and complex queries.
+table.optimizer.distinct-agg.split.enabled: true
+
+#==============================================================================
+# Network
+#==============================================================================
+
+# Number of extra network buffers to use for each outgoing/incoming gate
+# (result partition/input gate).
+taskmanager.network.memory.floating-buffers-per-gate: 256
+# The number of buffers available for each external blocking channel.
+# Will change it to be the default value later.
+taskmanager.network.memory.buffers-per-external-blocking-channel: 16
+# The maximum number of concurrent requests in the reduce-side tasks.
+# Will change it to be the default value later.
+task.external.shuffle.max-concurrent-requests: 512
+# Whether to enable compress shuffle data when using external shuffle.
+# Will change it to be the default value later.
+task.external.shuffle.compression.enable: true
+# Maximum backoff time (ms) for partition requests of input channels.
+taskmanager.network.request-backoff.max: 300000
+
+#==============================================================================
+# Flink REST API & Web UI
+#==============================================================================
+
+# The port to which the REST client connects to. If rest.bind-port has
+# not been specified, then the server will bind to this port as well.
+rest.port: 8081
+# The address to which the REST client will connect to
+rest.address: localhost
+# Port range for the REST and web server to bind to.
+# rest.bind-port: 8080-8090
+# The address that the REST & web server binds to
+# By default, this is localhost, which prevents the REST & web server from
+# being able to communicate outside of the machine/container it is running on.
+# To enable this, set the bind address to one that has access to outside-facing
+# network interface, such as 0.0.0.0.
+rest.bind-address: localhost
+# Flag to specify whether job submission is enabled from the web-based
+# runtime monitor. Uncomment to disable.
+# web.submit.enable: false
+# Flag to specify whether job cancellation is enabled from the web-based
+# runtime monitor. Uncomment to disable.
+# web.cancel.enable: falseblob.server.port: 6124
+
+#=======================================================================
+# JMX and Prometheus Reporter
+#=======================================================================
+metrics.reporters: jmx, prom
+
+metrics.reporter.jmx.factory.class: org.apache.flink.metrics.jmx.JMXReporterFactory
+metrics.reporter.jmx.port: 8789-8799
+metrics.delimiter: .
+metrics.reporter.jmx.interval: 10 SECONDS
+env.java.opts: -Djava.net.preferIPv4Stack=true -Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.port=9999 -Dcom.sun.management.jmxremote.rmi.port=9999 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false -Djava.rmi.server.hostname=0.0.0.0 -Dcom.sun.management.jmxremote.local.only=false
+
+metrics.reporter.prom.factory.class: org.apache.flink.metrics.prometheus.PrometheusReporterFactory
+
+#=======================================================================
+# Miscellaneous
+#=======================================================================
+blob.server.port: 6124
+query.server.port: 6125
+
+#=====================
+# Advanced
+#=====================
+taskmanager.network.detailed-metrics: true
+
+#==============================================================================
+# Runtime Others
+#==============================================================================
+
+# akka configs
+akka.ask.timeout: 120 s
+akka.watch.heartbeat.interval: 10 s
+akka.framesize: 102400kB
+
+# timeout to get response from REST. it is also used as the default future
+# timeout when REST quries Flink job status
+web.timeout: 120000
+
+classloader.resolve-order: parent-first

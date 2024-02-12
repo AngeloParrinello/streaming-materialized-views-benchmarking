@@ -1,0 +1,58 @@
+image: openjdk:11
+
+before_script:  # This command is run before all scripts in all stages, essentially before each job
+  - GRADLE_USER_HOME="$(pwd)/.gradle"
+  - export GRADLE_USER_HOME
+  - java -version
+  - chmod +x ./gradlew
+
+services:
+  - name: docker:dind
+    # explicitly disable tls to avoid docker startup interruption
+    command: ["--tls=false"]
+    
+variables:
+  # Instruct Testcontainers to use the daemon of DinD.
+  DOCKER_HOST: "tcp://docker:2375"
+  # Instruct Docker not to start over TLS.
+  DOCKER_TLS_CERTDIR: ""
+  # Improve performance with overlayfs.
+  DOCKER_DRIVER: overlay2
+
+stages:          # List of stages for jobs, and their order of execution
+  - build
+  - test
+  # - deploy
+
+build:        # This job's stage is 'build', which is the first stage
+  stage: build
+  script: ./gradlew --build-cache --stacktrace assemble
+  cache:      # specify a list of files and directories to cache between jobs.
+    key: "$CI_COMMIT_REF_NAME" # Give each cache a unique identifying key. All jobs that use the same cache key use the same cache, including in different pipelines.
+    policy: push   # With push, you "build" the cache (you fill the cache with something). The default is pull-push.
+    paths:    # specify a list of files and directories to cache between jobs.
+      - build
+      - .gradle
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^feature/
+      when: on_success
+
+
+test:     # This job's stage is 'test', which is the second stage
+  stage: test     # It only starts when the job in the build stage completes successfully. If we had defined other jobs in the build stage, they would run in parallel.
+  script:
+    - ./gradlew check --stacktrace
+  cache:
+    key: "$CI_COMMIT_REF_NAME"
+    policy: pull
+    paths:
+      - build
+      - .gradle
+  rules:
+    - if: $CI_COMMIT_BRANCH =~ /^feature/
+      when: on_success
+
+# deploy:     # This job runs in the deploy stage, which is the last stage
+  # stage: deploy   # It only starts when jobs in the previous stages complete successfully
+  # script: echo "Define your deployment script!"
+  # environment: production

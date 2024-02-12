@@ -1,0 +1,26 @@
+-- -------------------------------------------------------------------------------------------------
+-- Query 6: Average Selling Price by Seller
+-- -------------------------------------------------------------------------------------------------
+-- What is the average selling price per seller for their last 10 closed auctions.
+-- Shares the same ‘winning bids’ core as for Query4, and illustrates a specialized combiner.
+-- -------------------------------------------------------------------------------------------------
+
+-- CREATE TABLE nexmark_q6
+-- (
+--    seller    BIGINT,
+--    avg_price BIGINT
+-- ) WITH (
+--      'connector' = 'blackhole'
+--      );
+
+-- The following query does not work because of this issue: https://issues.apache.org/jira/browse/FLINK-19059
+-- INSERT INTO nexmark_q6
+-- SELECT seller,
+--       AVG(price) OVER (PARTITION BY seller ORDER BY entryTime ROWS BETWEEN 10 PRECEDING AND CURRENT ROW)
+-- FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY W.id, W.seller ORDER BY W.price DESC) AS rownum
+--      FROM (SELECT A.id, A.seller, B.price, B.entryTime
+--            FROM auctions AS A,
+--                 bids AS B
+--            WHERE A.id = B.auction
+--              and B.entryTime between A.entryTime and A.expirationTime) AS W)
+-- WHERE rownum <= 1;
