@@ -1,3 +1,5 @@
+# TODO: the main repo is still on Gitlab. This is a mirror of that repo for Thesis purposes.
+
 # Streaming materialized views benchmarking
 
 This repository contains the source code for the thesis "Streaming materialized views benchmarking"
